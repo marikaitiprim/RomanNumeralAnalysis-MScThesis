@@ -46,7 +46,7 @@ if __name__ == "__main__":
             print(f"Number of Instruments: {len(midi_info['instrument'])}")
             print(f"Key Signature Changes: {midi_info['key_signature']}")
             print(f"Number of Onsets: {len(midi_info['onsets'])}")
-            print(f"Number of Notes: {len(midi_info['notes'])}\n")
+            print(f"Number of Notes: {len(midi_info['notes'][0])}\n")
 
 
 

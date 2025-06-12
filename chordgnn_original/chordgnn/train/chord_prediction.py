@@ -1,5 +1,8 @@
 import chordgnn as st
+import os
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 import torch
+torch.set_float32_matmul_precision('medium')
 import random
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -14,10 +17,10 @@ parser.add_argument('--gpus', type=str, default="0")
 parser.add_argument('--n_layers', type=int, default=1)
 parser.add_argument('--n_hidden', type=int, default=256)
 parser.add_argument('--dropout', type=float, default=0.44)
-parser.add_argument('--batch_size', type=int, default=100)
+parser.add_argument('--batch_size', type=int, default=32)  #100
 parser.add_argument('--lr', type=float, default=0.0015)
 parser.add_argument('--weight_decay', type=float, default=0.0035)
-parser.add_argument('--num_workers', type=int, default=0) #20
+parser.add_argument('--num_workers', type=int, default=20) 
 parser.add_argument("--collection", type=str, default="all",
                 choices=["abc", "bps", "haydnop20", "wir", "wirwtc", "tavern", "all"],  help="Collection to test on.")
 parser.add_argument("--predict", action="store_true", help="Obtain Predictions using wandb cloud stored artifact.")
@@ -33,21 +36,19 @@ parser.add_argument("--n_epochs", type=int, default=100, help="Number of epochs 
 # for reproducibility
 torch.manual_seed(0)
 random.seed(0)
-torch.use_deterministic_algorithms(True)
+# torch.use_deterministic_algorithms(True)
 
 args = parser.parse_args()
-devices = 1
-dev = "cpu"
-# if isinstance(eval(args.gpus), int):
-#     if eval(args.gpus) >= 0:
-#         devices = [eval(args.gpus)]
-#         dev = devices[0]
-#     else:
-#         devices = None
-#         dev = "cpu"
-# else:
-#     devices = [eval(gpu) for gpu in args.gpus.split(",")]
-#     dev = None
+if isinstance(eval(args.gpus), int):
+    if eval(args.gpus) >= 0:
+        devices = [eval(args.gpus)]
+        dev = devices[0]
+    else:
+        devices = None
+        dev = "cpu"
+else:
+    devices = [eval(gpu) for gpu in args.gpus.split(",")]
+    dev = None
 n_layers = args.n_layers
 n_hidden = args.n_hidden
 force_reload = False
@@ -62,7 +63,7 @@ use_gradnorm = args.mtl_norm == "GradNorm"
 weight_loss = args.mtl_norm not in ["Neutral", "Rotograd", "GradNorm"]
 
 wandb_logger = WandbLogger(
-    log_model=True,
+    log_model="False",#"True"
     entity="melkisedeath",
     project="chord_rec",
     group=args.collection,
@@ -72,18 +73,19 @@ wandb_logger = WandbLogger(
     name=name)
 
 datamodule = st.data.AugmentedGraphDatamodule(
-    num_workers=0, include_synth=args.include_synth, num_tasks=args.num_tasks,  #16
+    num_workers=8, include_synth=args.include_synth, num_tasks=args.num_tasks,  #16
     collection=args.collection, batch_size=args.batch_size, version=args.data_version)
 model = st.models.chord.ChordPrediction(
     datamodule.features, args.n_hidden, datamodule.tasks, args.n_layers, lr=args.lr, dropout=args.dropout,
     weight_decay=args.weight_decay, use_nade=use_nade, use_jk=args.use_jk, use_rotograd=use_rotograd,
     use_gradnorm=use_gradnorm, device=dev, weight_loss=weight_loss)
 checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="global_step", mode="max")
+# checkpoint_callback = ModelCheckpoint(save_top_k=0)
 early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.02, patience=5, verbose=False, mode="min")
 use_ddp = len(devices) > 1 if isinstance(devices, list) else False
 trainer = Trainer(
     max_epochs=args.n_epochs,
-    accelerator="cpu", devices=devices, #auto
+    accelerator="auto", devices=devices, 
     num_sanity_val_steps=1,
     logger=wandb_logger,
     # plugins=DDPPlugin(find_unused_parameters=False) if use_ddp else None,

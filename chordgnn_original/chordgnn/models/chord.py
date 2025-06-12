@@ -85,16 +85,13 @@ class OnsetEdgePooling(nn.Module):
         e = e + self.add_to_edge_score
 
 
-        # device = x.get_device()
-        # if device > 0:
-        #     adj = torch.sparse_coo_tensor(
-        #         edge_index, torch.ones(len(edge_index[0])).to(x.get_device()), (len(x), len(x))).to_dense().to(x.get_device())
-        # else:
-        #     adj = torch.sparse_coo_tensor(
-        #         edge_index, torch.ones(len(edge_index[0])), (len(x), len(x))).to_dense()
-            
-        adj = torch.sparse_coo_tensor(
-            edge_index, torch.ones(len(edge_index[0]), device=x.device), (len(x), len(x))).to_dense()
+        device = x.get_device()
+        if device > 0:
+            adj = torch.sparse_coo_tensor(
+                edge_index, torch.ones(len(edge_index[0])).to(x.get_device()), (len(x), len(x))).to_dense().to(x.get_device())
+        else:
+            adj = torch.sparse_coo_tensor(
+                edge_index, torch.ones(len(edge_index[0])), (len(x), len(x))).to_dense()
 
         # Get neighbor information
         h = x + torch.mm(adj, self.trans(x)) / (adj.sum(dim=1).reshape(adj.shape[0], -1) + 1)
@@ -193,12 +190,9 @@ class SimpleOnsetEdgePooling(nn.Module):
         e = F.dropout(e, p=self.dropout, training=self.training)
         e = self.compute_edge_score(e, edge_index, x.size(0))
         e = e + self.add_to_edge_score
-        # adj = torch.sparse_coo_tensor(
-        #     edge_index, torch.ones(len(edge_index[0])).to(x.get_device()), (len(x), len(x))).to_dense().to(
-        #     x.get_device())
-        
         adj = torch.sparse_coo_tensor(
-            edge_index, torch.ones(len(edge_index[0]), device=x.device), (len(x), len(x))).to_dense()
+            edge_index, torch.ones(len(edge_index[0])).to(x.get_device()), (len(x), len(x))).to_dense().to(
+            x.get_device())
         
         # Get neighbor information
         # h = x + torch.mm(adj, self.trans(x)) / (adj.sum(dim=1).reshape(adj.shape[0], -1) + 1)
@@ -277,16 +271,15 @@ class OnsetEdgePoolingVersion2(nn.Module):
         Return types:
             * **x** *(Tensor)* - The pooled node features.
         """
-        # device = x.get_device() if x.get_device()>=0 else "cpu"
-        device = x.device
-        # if device >= 0:
-        #     adj = torch.sparse_coo_tensor(
-        #         edge_index, torch.ones(len(edge_index[0])).to(device), (len(x), len(x))).to_dense().to(device)
-        # else:
-        #     adj = torch.sparse_coo_tensor(
-        #         edge_index, torch.ones(len(edge_index[0])), (len(x), len(x))).to_dense().type(x.dtype)
-        # adj = adj.fill_diagonal_(1)
-        # h = torch.mm(adj, self.trans(x)) / adj.sum(dim=1).reshape(adj.shape[0], -1)
+        device = x.get_device() if x.get_device()>=0 else "cpu"
+        if device >= 0:
+            adj = torch.sparse_coo_tensor(
+                edge_index, torch.ones(len(edge_index[0])).to(device), (len(x), len(x))).to_dense().to(device)
+        else:
+            adj = torch.sparse_coo_tensor(
+                edge_index, torch.ones(len(edge_index[0])), (len(x), len(x))).to_dense().type(x.dtype)
+        adj = adj.fill_diagonal_(1)
+        h = torch.mm(adj, self.trans(x)) / adj.sum(dim=1).reshape(adj.shape[0], -1)
         # add self loops to edge_index with size (2, num_edges + num_nodes)
         edge_index_sl = torch.cat([edge_index, torch.arange(x.size(0)).view(1, -1).repeat(2, 1).to(device)], dim=1)
         h = scatter(self.trans(x)[edge_index_sl[0]], edge_index_sl[1], 0, out=torch.zeros(x.shape).to(device), reduce='mean')
@@ -541,8 +534,7 @@ class ChordPrediction(LightningModule):
                  use_rotograd=False,
                  use_gradnorm=False,
                  weight_loss=True,
-                #  device=0
-                device="cpu"
+                 device=0
                  ):
         super(ChordPrediction, self).__init__()
         self.tasks = tasks
@@ -554,8 +546,7 @@ class ChordPrediction(LightningModule):
             use_nade=use_nade, use_jk=use_jk).float().to(self.device)
         if self.use_rotograd:
             from rotograd import RotoGrad, cached
-            device = torch.device(device)
-            # device = torch.device(device if torch.cuda.is_available() else "cpu")
+            device = torch.device(device if torch.cuda.is_available() else "cpu")
             self.module = RotoGrad(
                 backbone=self.module.encoder.to(device),
                 heads=[self.module.classifier.classifier[task].to(device) for task in tasks.keys()],
@@ -566,8 +557,7 @@ class ChordPrediction(LightningModule):
             self.automatic_optimization = False
         if use_gradnorm:
             from rotograd import RotoGradNorm, cached
-            device = torch.device(device)
-            # device = torch.device(device if torch.cuda.is_available() else "cpu")
+            device = torch.device(device if torch.cuda.is_available() else "cpu")
             self.module = RotoGradNorm(
                 backbone=self.module.encoder.to(device),
                 heads=[self.module.classifier.classifier[task].to(device) for task in tasks.keys()],
@@ -760,8 +750,7 @@ class SingleTaskPrediction(LightningModule):
                  use_nade=False,
                  use_jk=False,
                  use_rotograd=False,
-                #  device = 0
-                device = "cpu"
+                 device = 0
                  ):
         super(SingleTaskPrediction, self).__init__()
         self.tasks = tasks
@@ -869,8 +858,7 @@ class PostChordPrediction(LightningModule):
                  use_nade=False,
                  use_jk=False,
                  use_rotograd=False,
-                #  device=0,
-                device="cpu",
+                 device=0,
                  frozen_model = ChordPredictionModel(83)
                  ):
         super(PostChordPrediction, self).__init__()

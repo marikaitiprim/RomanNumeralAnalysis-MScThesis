@@ -708,7 +708,8 @@ class ChordPrediction(LightningModule):
             row = df.iloc[i - 1]
             for j in range(onset_diff):
                 row["onset"] = row["onset"] + 0.125
-                dfout = dfout.append(row, ignore_index=True)
+                # dfout = dfout.append(row, ignore_index=True)
+                dfout = pd.concat([dfout, pd.DataFrame([row])], ignore_index=True)
         dfout.sort_values(by="onset", inplace=True)
         if isinstance(acc_RomNum, dict):
             return {k: dfout[k].to_numpy() for k in acc_RomNum.keys()}
@@ -819,7 +820,8 @@ class SingleTaskPrediction(LightningModule):
             row = df.iloc[i - 1]
             for j in range(onset_diff):
                 row["onset"] = row["onset"] + 0.125
-                dfout = dfout.append(row, ignore_index=True)
+                # dfout = dfout.append(row, ignore_index=True)
+                dfout = pd.concat([dfout, pd.DataFrame([row])], ignore_index=True)
         dfout.sort_values(by="onset", inplace=True)
         return dfout["acc"].to_numpy().mean()
 
@@ -990,7 +992,8 @@ class PostChordPrediction(LightningModule):
             row = df.iloc[i - 1]
             for j in range(onset_diff):
                 row["onset"] = row["onset"] + 0.125
-                dfout = dfout.append(row, ignore_index=True)
+                # dfout = dfout.append(row, ignore_index=True)
+                dfout = pd.concat([dfout, pd.DataFrame([row])], ignore_index=True)
         dfout.sort_values(by="onset", inplace=True)
         if isinstance(acc_RomNum, dict):
             return {k: dfout[k].to_numpy() for k in acc_RomNum.keys()}

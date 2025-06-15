@@ -1,10 +1,13 @@
 import chordgnn as st
+import os 
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 import torch
 import random
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning import Trainer
-from pytorch_lightning.plugins import DDPPlugin
+# from pytorch_lightning.plugins import DDPPlugin
+from pytorch_lightning.strategies import DDPStrategy
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import argparse
 
@@ -14,7 +17,7 @@ parser.add_argument('--gpus', type=str, default="0")
 parser.add_argument('--n_layers', type=int, default=1)
 parser.add_argument('--n_hidden', type=int, default=256)
 parser.add_argument('--dropout', type=float, default=0.4)
-parser.add_argument('--batch_size', type=int, default=100)
+parser.add_argument('--batch_size', type=int, default=32) #100
 parser.add_argument('--lr', type=float, default=0.001)
 parser.add_argument('--weight_decay', type=float, default=5e-4)
 parser.add_argument('--num_workers', type=int, default=20)
@@ -58,7 +61,7 @@ name = "Post-{}-{}x{}-lr={}-wd={}-dr={}".format("NADE" if args.use_nade else ("R
                                             args.lr, args.weight_decay, args.dropout)
 
 wandb_logger = WandbLogger(
-    log_model=True,
+    log_model=False, #true
     project="chord_rec",
     entity="melkisedeath",
     job_type="PostProcess",
@@ -66,7 +69,7 @@ wandb_logger = WandbLogger(
     name=name)
 
 datamodule = st.data.AugmentedGraphDatamodule(
-    num_workers=16, include_synth=args.include_synth, num_tasks=args.num_tasks,
+    num_workers=8, include_synth=args.include_synth, num_tasks=args.num_tasks, #16
     collection=args.collection, batch_size=args.batch_size, version=args.data_version)
 
 checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="Val RomNum", mode="max")
@@ -77,7 +80,8 @@ trainer = Trainer(
     accelerator="auto", devices=devices,
     num_sanity_val_steps=1,
     logger=wandb_logger,
-    plugins=DDPPlugin(find_unused_parameters=False) if use_ddp else None,
+    # plugins=DDPPlugin(find_unused_parameters=False) if use_ddp else None,
+    plugins=DDPStrategy(find_unused_parameters=False) if use_ddp else None,
     callbacks=[checkpoint_callback],
     reload_dataloaders_every_n_epochs=5
     )
@@ -89,13 +93,15 @@ run = wandb.init(
     job_type=f"PostProcess - data={args.data_version}",
     group=args.collection,
     name=name)
-artifact = run.use_artifact(args.use_ckpt, type='model')
-artifact_dir = artifact.download()
+# artifact = run.use_artifact(args.use_ckpt, type='model')
+# artifact_dir = artifact.download()
 encoder = st.models.chord.ChordPrediction(
     datamodule.features, 256, datamodule.tasks, 1, lr=0.001, dropout=0.0,
     weight_decay=0.0, use_nade=False, use_jk=False, use_rotograd=False,
     device=dev)
-frozen_model = encoder.load_from_checkpoint(os.path.join(os.path.normpath(artifact_dir), "model.ckpt")).module
+
+frozen_model = encoder.load_from_checkpoint(args.use_ckpt).module
+# frozen_model = encoder.load_from_checkpoint(os.path.join(os.path.normpath(artifact_dir), "model.ckpt")).module
 model = st.models.chord.PostChordPrediction(
     datamodule.features, args.n_hidden, datamodule.tasks, args.n_layers, lr=args.lr, dropout=args.dropout,
     weight_decay=args.weight_decay, use_nade=args.use_nade, use_jk=args.use_jk, use_rotograd=args.use_rotograd,

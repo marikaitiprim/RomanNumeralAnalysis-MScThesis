@@ -142,7 +142,7 @@ def extract_midi_info(file_path, step_size=0.125):
 
     return df
 
-def store_to_tsv(dataset):
+def store_to_tsv(dataset, folder_name):
 
     for file in os.listdir(dataset): #browse through the files in the dataset directory
 
@@ -153,9 +153,11 @@ def store_to_tsv(dataset):
             df_midi_info = extract_midi_info(file_path) #extract MIDI info
 
             tsv_filename = file.replace('.mid', '.tsv')
+            tsv_filename = os.path.join(folder_name, tsv_filename)
             df_midi_info.to_csv(tsv_filename, sep='\t', index=False) #store to .tsv file
 
 
 if __name__ == "__main__":
     dataset = "/Users/marikaitiprimenta/Desktop/MSC-THESIS/ChordRecognition-MScThesis/dataset"
-    store_to_tsv(dataset)
+    folder_name="/Users/marikaitiprimenta/Desktop/MSC-THESIS/ChordRecognition-MScThesis/dataset_tsv"
+    store_to_tsv(dataset, folder_name)

@@ -74,25 +74,27 @@ def get_data_statistics(folder):
     all_hr = []
     all_inv = []
 
-    for file in os.listdir(folder): #browse through the files in the dataset directory
+    for root, _, files in os.walk(folder):
 
-        if file.endswith('.tsv'):
-            file_path = os.path.join(folder, file)
-            df = pd.read_csv(file_path, sep='\t') # Read the tsv file into a DataFrame
+        for file in files: #browse through the files in the dataset directory
 
-            count_files += 1
-            count_rows += len(df)
-            count_tonicized += df["a_degree2"].notna().sum() # count non-null values in the degree_2 column
-            key_changes = count_key_changes(df)
-            if key_changes > 5: #more than 5 key changes in a file
-                count_key += 1
+            if file.endswith('.tsv'):
+                file_path = os.path.join(root, file)
+                df = pd.read_csv(file_path, sep='\t') # Read the tsv file into a DataFrame
+
+                count_files += 1
+                count_rows += len(df)
+                count_tonicized += df["a_degree2"].notna().sum() # count non-null values in the degree_2 column
+                key_changes = count_key_changes(df)
+                if key_changes > 5: #more than 5 key changes in a file
+                    count_key += 1
 
 
-            df["degree_num"] = df["a_degree1"].apply(extract_degree_number)
-            sub_df_hr = df[["degree_num", "a_harmonicRhythm"]].dropna()
-            sub_df_inv = df[["degree_num", "a_inversion"]].dropna()
-            all_hr.append(sub_df_hr)
-            all_inv.append(sub_df_inv)
+                df["degree_num"] = df["a_degree1"].apply(extract_degree_number)
+                sub_df_hr = df[["degree_num", "a_harmonicRhythm"]].dropna()
+                sub_df_inv = df[["degree_num", "a_inversion"]].dropna()
+                all_hr.append(sub_df_hr)
+                all_inv.append(sub_df_inv)
 
 
     print("Total number of files:", count_files)
@@ -108,6 +110,6 @@ def get_data_statistics(folder):
 
 
 if __name__ == "__main__":
-    data_folder =  "/Users/marikaitiprimenta/Desktop/MSC-THESIS/ChordRecognition-MScThesis/augmentednet_training_dataset/training"
+    data_folder =  "/Users/marikaitiprimenta/Desktop/MSC-THESIS/ChordRecognition-MScThesis/augmentednet_dataset"
     get_data_statistics(data_folder)
 

@@ -71,13 +71,10 @@ wandb_logger = WandbLogger(
     # job_type=first_name,
     name=name)
 
-datamodule = st.data.AugmentedGraphDatamodule(
-    num_workers=8, include_synth=args.include_synth, num_tasks=args.num_tasks,  #16
-    collection=args.collection, batch_size=args.batch_size, version=args.data_version)
-model = st.models.chord.ChordPrediction(
-    datamodule.features, args.n_hidden, datamodule.tasks, args.n_layers, lr=args.lr, dropout=args.dropout,
-    weight_decay=args.weight_decay, use_nade=use_nade, use_jk=args.use_jk, use_rotograd=use_rotograd,
-    use_gradnorm=use_gradnorm, device=dev, weight_loss=weight_loss)
+# datamodule = st.data.AugmentedGraphDatamodule(
+#     num_workers=8, include_synth=args.include_synth, num_tasks=args.num_tasks,  #16
+#     collection=args.collection, batch_size=args.batch_size, version=args.data_version)
+model = st.contrastive_learning.train.UnsupervisedContrastiveLearning()
 checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="global_step", mode="max")
 early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.02, patience=5, verbose=False, mode="min")
 use_ddp = len(devices) > 1 if isinstance(devices, list) else False
@@ -91,57 +88,8 @@ trainer = Trainer(
     reload_dataloaders_every_n_epochs=5,
     )
 
-if not args.predict:
-    if args.use_ckpt is not None:
-        import wandb, os
-        run = wandb.init(
-            project="chord_rec",
-            entity="melkisedeath",
-            group=args.collection,
-            job_type=f"data={args.data_version}",
-            name=name)
-        artifact = run.use_artifact(args.use_ckpt, type='model')
-        artifact_dir = artifact.download()
-        print("Using artifact from: ", artifact_dir)
-        trainer.test(model, datamodule, ckpt_path=os.path.join(artifact_dir, "model.ckpt"))
-    else:
-        # training
-        trainer.fit(model, datamodule)
-        # Testing with best model
-        trainer.test(model, datamodule, ckpt_path=checkpoint_callback.best_model_path)
-else:
-    # Testing with pretrained model
-    import wandb
-    import pandas as pd
-    # from chordgnn.utils.chord_representations import available_representations, solveChordSegmentation, resolveRomanNumeralCosine, formatRomanNumeral, formatChordLabel, generateRomanText
-    from chordgnn.utils.chord_representations_latest import available_representations
-    import partitura as pt
-    import copy, os
-    import numpy as np
-    import music21
 
-    artifact_dir = os.path.normpath("./artifacts/model-i7sxzy4y:v0")
-    if not os.path.exists(artifact_dir):
-        run = wandb.init()
-        artifact = run.use_artifact(args.use_ckpt, type='model')
-        artifact_dir = artifact.download()
-    model = model.load_from_checkpoint(os.path.join(artifact_dir, "model.ckpt")).module
-    inputPath = "./artifacts/op20n3-04.krn"
-    filename = os.path.basename(inputPath).split(".")[0] + "-chords.csv"
-    score = pt.load_score(inputPath)
-    dfdict = {}
-    with torch.no_grad():
-        model.eval()
-        prediction = model.predict(score)
-
-    for task in datamodule.tasks.keys():
-        predOnehot = torch.argmax(prediction[task], dim=-1).reshape(-1, 1)
-        decoded = available_representations[task].decode(predOnehot)
-        dfdict[task] = decoded
-    dfdict["onset"] = prediction["onset"]
-    dfdict["s_measure"] = prediction["s_measure"]
-    df = pd.DataFrame(dfdict)
-    # Save the predictions to new artifacts folder
-    if not os.path.exists("./artifacts"):
-        os.mkdir("./artifacts")
-    df.to_csv(os.path.join("./artifacts", filename), index=False)
+# training
+trainer.fit(model, datamodule)
+# Testing with best model
+trainer.test(model, datamodule, ckpt_path=checkpoint_callback.best_model_path)

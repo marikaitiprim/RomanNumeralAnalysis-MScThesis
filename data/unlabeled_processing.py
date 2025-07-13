@@ -115,7 +115,12 @@ def extract_midi_info(file_path, step_size=0.125):
     """
 
     df = pd.DataFrame() #initialize and empty DataFrame
-    midi_stream = pm.PrettyMIDI(file_path) #load the MIDI file with pretty_midi
+
+    try:
+        midi_stream = pm.PrettyMIDI(file_path)
+    except Exception as e:
+        print(f"Skipping file {file_path} due to error: {e}")
+        return df #return empty DataFrame if the file is not valid
 
     df['j_offset'] = get_offsets(midi_stream)
 
@@ -144,20 +149,23 @@ def extract_midi_info(file_path, step_size=0.125):
 
 def store_to_tsv(dataset, folder_name):
 
-    for file in os.listdir(dataset): #browse through the files in the dataset directory
+    for root, _, files in os.walk(dataset): #browse through the files in the dataset directory
+        for file in files: 
+            if file.endswith('.mid'):
+                file_path = os.path.join(root, file) #create the full path to the file
 
-        if file.endswith('.mid'):
-            file_path = os.path.join(dataset, file) #create the full path to the file
+                print("Processing file:", file)
+                df_midi_info = extract_midi_info(file_path) #extract MIDI info
 
-            print("Processing file:", file)
-            df_midi_info = extract_midi_info(file_path) #extract MIDI info
+                if df_midi_info.empty: #if the MIDI file was not valid, skip it
+                    continue
 
-            tsv_filename = file.replace('.mid', '.tsv')
-            tsv_filename = os.path.join(folder_name, tsv_filename)
-            df_midi_info.to_csv(tsv_filename, sep='\t', index=False) #store to .tsv file
+                tsv_filename = file.replace('.mid', '.tsv')
+                tsv_filename = os.path.join(folder_name, tsv_filename)
+                df_midi_info.to_csv(tsv_filename, sep='\t', index=False) #store to .tsv file
 
 
 if __name__ == "__main__":
-    dataset = "/Users/marikaitiprimenta/Desktop/MSC-THESIS/ChordRecognition-MScThesis/dataset"
+    dataset = "/Users/marikaitiprimenta/Desktop/MSC-THESIS/ChordRecognition-MScThesis/dataset" # copy Lakh files to this directory
     folder_name="/Users/marikaitiprimenta/Desktop/MSC-THESIS/ChordRecognition-MScThesis/dataset_tsv"
     store_to_tsv(dataset, folder_name)

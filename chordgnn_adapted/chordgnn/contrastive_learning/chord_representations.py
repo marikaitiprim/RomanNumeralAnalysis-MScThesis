@@ -107,9 +107,6 @@ def create_data(filtered_df, time_signature, interval="P1"):
     X = np.array(note_array, dtype)
     return X
 
-
-
-
 def time_divided_tsv_to_note_array(time_divided_tsv_path):
     '''Given a time divided tsv file from AugmentedNet Dataset it returns a numpy array of notes.
 
@@ -125,6 +122,9 @@ def time_divided_tsv_to_note_array(time_divided_tsv_path):
     '''
 
     df = pd.read_csv(time_divided_tsv_path, sep='\t', header=0)
+
+    df = df.dropna(subset=['s_notes'])
+
     time_signature = len(df[df["s_measure"] == 2]) / 8
     # Assume 4/4 time signature when 0
     time_signature = 4 if time_signature == 0 else time_signature

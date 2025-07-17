@@ -56,10 +56,10 @@ num_workers = args.num_workers
 first_name = args.mtl_norm if args.mtl_norm != "none" else "Wloss" #Wloss is used by default (best results in paper)
 name = "{}-{}x{}-lr={}-wd={}-dr={}".format(first_name, n_layers, n_hidden,
                                             args.lr, args.weight_decay, args.dropout)
-use_nade = args.mtl_norm == "NADE" # false by default
-use_rotograd = args.mtl_norm == "Rotograd" # false by default
-use_gradnorm = args.mtl_norm == "GradNorm" #false by default
-weight_loss = args.mtl_norm not in ["Neutral", "Rotograd", "GradNorm"] # true by default
+# use_nade = args.mtl_norm == "NADE" # false by default
+# use_rotograd = args.mtl_norm == "Rotograd" # false by default
+# use_gradnorm = args.mtl_norm == "GradNorm" #false by default
+# weight_loss = args.mtl_norm not in ["Neutral", "Rotograd", "GradNorm"] # true by default
 
 wandb_logger = WandbLogger(
     log_model="False",#"True"
@@ -71,25 +71,25 @@ wandb_logger = WandbLogger(
     # job_type=first_name,
     name=name)
 
-# datamodule = st.data.AugmentedGraphDatamodule(
-#     num_workers=8, include_synth=args.include_synth, num_tasks=args.num_tasks,  #16
-#     collection=args.collection, batch_size=args.batch_size, version=args.data_version)
-model = st.contrastive_learning.train.UnsupervisedContrastiveLearning()
-checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="global_step", mode="max")
-early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.02, patience=5, verbose=False, mode="min")
-use_ddp = len(devices) > 1 if isinstance(devices, list) else False
-trainer = Trainer(
-    max_epochs=args.n_epochs,
-    accelerator="auto", devices=devices, 
-    num_sanity_val_steps=1,
-    logger=wandb_logger,
-    plugins=DDPStrategy(find_unused_parameters=False) if use_ddp else None,
-    callbacks=[checkpoint_callback],
-    reload_dataloaders_every_n_epochs=5,
-    )
+datamodule = st.contrastive_learning.datamodule.ContrastiveGraphDatamodule(batch_size=args.batch_size, num_workers=8, num_tasks=args.num_tasks) 
+
+# model = st.contrastive_learning.train.UnsupervisedContrastiveLearning()
+
+# checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="global_step", mode="max")
+# early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.02, patience=5, verbose=False, mode="min")
+# use_ddp = len(devices) > 1 if isinstance(devices, list) else False
+# trainer = Trainer(
+#     max_epochs=args.n_epochs,
+#     accelerator="auto", devices=devices, 
+#     num_sanity_val_steps=1,
+#     logger=wandb_logger,
+#     plugins=DDPStrategy(find_unused_parameters=False) if use_ddp else None,
+#     callbacks=[checkpoint_callback],
+#     reload_dataloaders_every_n_epochs=5,
+#     )
 
 
-# training
-trainer.fit(model, datamodule)
-# Testing with best model
-trainer.test(model, datamodule, ckpt_path=checkpoint_callback.best_model_path)
+# # training
+# trainer.fit(model, datamodule)
+# # Testing with best model
+# trainer.test(model, datamodule, ckpt_path=checkpoint_callback.best_model_path)

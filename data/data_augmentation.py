@@ -22,6 +22,16 @@ def data_augmentation_time(file_path, factor=1.2):
 
     return df 
 
+def split_notes(x):
+    try:
+        # Convert string like "['C#5, G#4']" → ['C#5, G#4']
+        parsed = ast.literal_eval(x) if isinstance(x, str) else x
+        if isinstance(parsed, list) and len(parsed) == 1 and isinstance(parsed[0], str):
+            return [n.strip() for n in parsed[0].split(',')]
+        return parsed
+    except Exception:
+        return x  # fallback if x is malformed
+
 def data_augmentation_pitch(file_path):
     """"
     Performs data augmentation on the pitch of the MIDI file.
@@ -35,6 +45,8 @@ def data_augmentation_pitch(file_path):
     df['s_notes'] = df['s_notes'].apply(lambda x: [note.strip() for note in x if note.strip()]) #remove whitespaces
     df['s_notes'] = df['s_notes'].apply(lambda x: [pm.note_number_to_name(pm.note_name_to_number(n) + 1) for n in x] if x else []) # increase pitch by one semitone
     df['s_notes'] = df['s_notes'].apply(lambda x: [', '.join(x)] if x else '') #convert back to string
+
+    df['s_notes'] = df['s_notes'].apply(split_notes)
 
     return df   
 

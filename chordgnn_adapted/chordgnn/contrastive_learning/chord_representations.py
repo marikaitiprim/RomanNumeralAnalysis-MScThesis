@@ -88,6 +88,9 @@ def create_data(filtered_df, time_signature, interval="P1"):
     #     axis=1)
     for i, row in filtered_df.iterrows():
 
+        if not isinstance(row['s_notes'], str) or row['s_notes'].strip() in ["", "[]"]:
+            continue  # skip invalid or empty rows
+
         note_str = row['s_notes']
         row['s_notes'] = re.sub(r'([#b])[^\w]', r'\1', note_str) #clean notes like #-
 
@@ -122,9 +125,6 @@ def time_divided_tsv_to_note_array(time_divided_tsv_path):
     '''
 
     df = pd.read_csv(time_divided_tsv_path, sep='\t', header=0)
-
-    df = df.dropna(subset=['s_notes'])
-
     time_signature = len(df[df["s_measure"] == 2]) / 8
     # Assume 4/4 time signature when 0
     time_signature = 4 if time_signature == 0 else time_signature

@@ -39,6 +39,37 @@ class AugmentedNetChordDataset:
         """Return list of all valid .tsv file paths."""
         return self.scores
 
+class PairedContrastiveDataset(chordgnnDataset): #positive pairs
+    def __init__(self, original_dataset, pitch_aug_dataset, time_aug_dataset):
+        assert len(original_dataset) == len(pitch_aug_dataset) == len(time_aug_dataset), \
+            "All datasets must be of the same length"
+        self.original_dataset = original_dataset
+        self.pitch_aug_dataset = pitch_aug_dataset
+        self.time_aug_dataset = time_aug_dataset
+
+    def __len__(self):
+        return len(self.original_dataset)
+
+    def __getitem__(self, idx):
+        # Choose randomly one of the 3 valid positive pair types
+        pair_type = random.choice(["pitch-time", "pitch-original", "time-original"])
+
+        if pair_type == "pitch-time":
+            view_1 = self.pitch_aug_dataset[idx]
+            view_2 = self.time_aug_dataset[idx]
+        elif pair_type == "pitch-original":
+            view_1 = self.pitch_aug_dataset[idx]
+            view_2 = self.original_dataset[idx]
+        elif pair_type == "time-original":
+            view_1 = self.time_aug_dataset[idx]
+            view_2 = self.original_dataset[idx]
+
+        # Randomly flip the order to avoid encoder bias
+        if random.random() < 0.5:
+            return view_1, view_2
+        else:
+            return view_2, view_1
+
 
 class ChordGraphDataset(chordgnnDataset):
     def __init__(self, dataset_base, max_size=None, verbose=True, nprocs=1, name=None, raw_dir=None):

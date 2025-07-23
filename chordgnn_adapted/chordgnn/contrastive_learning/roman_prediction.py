@@ -59,37 +59,38 @@ name = "{}-{}x{}-lr={}-wd={}-dr={}".format(first_name, n_layers, n_hidden,
 # use_nade = args.mtl_norm == "NADE" # false by default
 # use_rotograd = args.mtl_norm == "Rotograd" # false by default
 # use_gradnorm = args.mtl_norm == "GradNorm" #false by default
-# weight_loss = args.mtl_norm not in ["Neutral", "Rotograd", "GradNorm"] # true by default
+weight_loss = args.mtl_norm not in ["Neutral", "Rotograd", "GradNorm"] # true by default
 
-wandb_logger = WandbLogger(
-    log_model="False",#"True"
-    entity="melkisedeath",
-    project="chord_rec",
-    group=args.collection,
-    # group="ablation",
-    job_type=f"data={args.data_version}",
-    # job_type=first_name,
-    name=name)
+# wandb_logger = WandbLogger(
+#     log_model="False",#"True"
+#     entity="melkisedeath",
+#     project="chord_rec",
+#     group=args.collection,
+#     # group="ablation",
+#     job_type=f"data={args.data_version}",
+#     # job_type=first_name,
+#     name=name)
 
 datamodule = st.contrastive_learning.datamodule.ContrastiveGraphDatamodule(batch_size=args.batch_size, num_workers=8, num_tasks=args.num_tasks) 
 
-# model = st.contrastive_learning.train.UnsupervisedContrastiveLearning()
+model = st.contrastive_learning.train.UnsupervisedContrastiveLearning(datamodule.features, args.n_hidden, datamodule.tasks, args.n_layers, lr=args.lr, dropout=args.dropout,
+    weight_decay=args.weight_decay, use_jk=args.use_jk, device=dev, weight_loss=weight_loss)
 
-# checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="global_step", mode="max")
-# early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.02, patience=5, verbose=False, mode="min")
-# use_ddp = len(devices) > 1 if isinstance(devices, list) else False
-# trainer = Trainer(
-#     max_epochs=args.n_epochs,
-#     accelerator="auto", devices=devices, 
-#     num_sanity_val_steps=1,
-#     logger=wandb_logger,
-#     plugins=DDPStrategy(find_unused_parameters=False) if use_ddp else None,
-#     callbacks=[checkpoint_callback],
-#     reload_dataloaders_every_n_epochs=5,
-#     )
+checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="global_step", mode="max")
+early_stop_callback = EarlyStopping(monitor="train_loss", min_delta=0.02, patience=5, verbose=False, mode="min")
+use_ddp = len(devices) > 1 if isinstance(devices, list) else False
+trainer = Trainer(
+    max_epochs=args.n_epochs,
+    accelerator="auto", devices=devices, 
+    num_sanity_val_steps=1,
+    # logger=wandb_logger,
+    plugins=DDPStrategy(find_unused_parameters=False) if use_ddp else None,
+    callbacks=[checkpoint_callback],
+    reload_dataloaders_every_n_epochs=5,
+    )
 
 
-# # training
-# trainer.fit(model, datamodule)
-# # Testing with best model
+# training
+trainer.fit(model, datamodule)
+
 # trainer.test(model, datamodule, ckpt_path=checkpoint_callback.best_model_path)

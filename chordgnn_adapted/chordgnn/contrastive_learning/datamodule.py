@@ -55,25 +55,12 @@ class ContrastiveGraphDatamodule(LightningDataModule):
         print(f"Original dataset: {len(self.dataset_train)}")
         print(f"Pitch augmented dataset: {len(self.dataset_train_pitch)}")
         print(f"Tempo augmented dataset: {len(self.dataset_train_time)}")
-
-    # def collate_fn(self, batch):
-    #     batch_inputs, edges, edge_type, onset_div, name = batch[0]
-    #     # batch_inputs = F.normalize(batch_inputs.squeeze(0)) if self.normalize_features else batch_inputs.squeeze(0)
-    #     batch_inputs = batch_inputs.squeeze(0).float()
-    #     onset_div = onset_div.squeeze().to(batch_inputs.device)
-      
-    #     edges = edges.squeeze(0)
-    #     # Add reverse edges
-    #     edge_type = edge_type.squeeze(0)
-    #     edges, edge_type = add_reverse_edges_from_edge_index(edges, edge_type)
-    #     # edges = torch.cat([edges, edges.flip(0)], dim=1)
-    #     # edge_type = torch.cat([edge_type, edge_type], dim=0)
-    #     return batch_inputs, edges, edge_type, onset_div, name
     
     def collate_fn(self, batch):
         batch_view1 = [example[0] for example in batch]
         batch_view2 = [example[1] for example in batch]
         return self.collate_train_fn(batch_view1), self.collate_train_fn(batch_view2)
+
 
     def collate_train_fn(self, examples):
         lengths = list()
@@ -84,13 +71,13 @@ class ContrastiveGraphDatamodule(LightningDataModule):
         max_idx = []
         max_onset_div = []
         for e in examples:
-            lengths.append(e[3].shape[0])
+            lengths.append(e[0].shape[0]) #used to be labels.shape[0]
             x.append(e[0])
             edge_index.append(e[1])
             edge_types.append(e[2])
-            onset_divs.append(e[4])
+            onset_divs.append(e[3])
             max_idx.append(e[0].shape[0])
-            max_onset_div.append(e[4].max().item() + 1)
+            max_onset_div.append(e[3].max().item() + 1)
         lengths = torch.tensor(lengths).long()
         lengths, perm_idx = lengths.sort(descending=True)
         perm_idx = perm_idx.tolist()

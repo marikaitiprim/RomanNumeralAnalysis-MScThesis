@@ -119,11 +119,14 @@ class ChordGraphDataset(chordgnnDataset):
     def __len__(self):
         return len(self.graphs)
 
+    # def __getitem__(self, idx):
+    #     return [
+    #         self.get_graph_attr(i)
+    #         for i in idx
+    #     ]
+    
     def __getitem__(self, idx):
-        return [
-            self.get_graph_attr(i)
-            for i in idx
-        ]
+        return self.get_graph_attr(idx)
 
     def get_graph_attr(self, idx):
         if self.graphs[idx].x.size(0) > self.max_size:
@@ -133,13 +136,10 @@ class ChordGraphDataset(chordgnnDataset):
                 self.graphs[idx].edge_index[1], indices)
             onset_divs = torch.tensor(
                 self.graphs[idx].note_array["onset_div"][random_idx:random_idx + self.max_size])
-            unique_onsets = torch.unique(torch.tensor(self.graphs[idx].note_array["onset_div"]), sorted=True)
-            label_idx = (unique_onsets >= onset_divs.min()) & (unique_onsets <= onset_divs.max())
             return [
                 self.graphs[idx].x[indices],
                 self.graphs[idx].edge_index[:, edge_indices] - random_idx,
                 self.graphs[idx].edge_type[edge_indices],
-                self.graphs[idx].y[label_idx],
                 onset_divs,
                 self.graphs[idx].name
             ]
@@ -149,7 +149,6 @@ class ChordGraphDataset(chordgnnDataset):
                 self.graphs[idx].x,
                 self.graphs[idx].edge_index,
                 self.graphs[idx].edge_type,
-                self.graphs[idx].y,
                 torch.tensor(self.graphs[idx].note_array["onset_div"]),
                 self.graphs[idx].name
             ]

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_scatter import scatter_add
+from torch_scatter import scatter
 from pytorch_lightning import LightningModule
 from chordgnn.models.core import HGCN, MLP
 from info_nce import InfoNCE #pip install info-nce-pytorch
@@ -173,12 +173,6 @@ class ChordPredictionModel(nn.Module):
         self.encoder = ChordEncoder(in_feats, n_hidden, n_layers, activation=activation, dropout=dropout, use_jk=use_jk)
         self.classifier = MultiTaskMLP(n_hidden, n_hidden, tasks=tasks, n_layers=1, activation=activation, dropout=dropout)
 
-    # def forward(self, batch):
-    #     x, edge_index, edge_type, onset_index, onset_idx, lengths = batch
-    #     h = self.encoder((x, edge_index, edge_type, onset_index, onset_idx, lengths))
-    #     prediction = self.classifier(h)
-    #     return prediction
-
     def forward(self, batch, return_embedding=False):
         x, edge_index, edge_type, onset_index, onset_idx, lengths = batch
         h = self.encoder((x, edge_index, edge_type, onset_index, onset_idx, lengths))
@@ -240,45 +234,28 @@ class UnsupervisedContrastiveLearning(LightningModule):
 
     def training_step(self, batch, batch_idx):
         opt = self.optimizers()
-        # batch_inputs, edges, edge_type, batch_labels, onset_divs, lengths = batch
-        # batch_size = lengths.shape[0]
-        # onset_edges = edges[:, edge_type == 0]
-        # onset_idx = unique_onsets(onset_divs)
 
-        # batch_pred = self.module((batch_inputs, edges, edge_type, onset_edges, onset_idx, lengths))
-        
-        # loss = self.train_loss(batch_pred, batch_labels)
-        # self.log('train_loss', loss["total"].item(), on_step=False, on_epoch=True, prog_bar=False, batch_size=batch_size) 
-        # self.log("global_step", self.global_step, on_step=True, prog_bar=False, batch_size=batch_size)
-        # return loss["total"]
-    
-
-        # Unpack the paired views
         batch_view1, batch_view2 = batch
 
-        # Unpack each batch (from your collate_fn)
         x1, edge_index1, edge_type1, onset_divs1, lengths1 = batch_view1
         x2, edge_index2, edge_type2, onset_divs2, lengths2 = batch_view2
+
+        onset_edges1 = edge_index1[:, edge_type1 == 0]
+        onset_edges2 = edge_index2[:, edge_type2 == 0]
 
         onset_idx1 = unique_onsets(onset_divs1)
         onset_idx2 = unique_onsets(onset_divs2)
 
         # Encode both views
-        z1 = self.module((x1, edge_index1, edge_type1, onset_idx1, onset_idx1, lengths1), return_embedding=True)
-        z2 = self.module((x2, edge_index2, edge_type2, onset_idx2, onset_idx2, lengths2), return_embedding=True)
+        z1 = self.module((x1, edge_index1, edge_type1, onset_edges1, onset_idx1, lengths1), return_embedding=True)
+        z2 = self.module((x2, edge_index2, edge_type2, onset_edges2, onset_idx2, lengths2), return_embedding=True)
 
-        loss = self.train_loss(z1, z2)  # Should return a dict
+        loss = self.train_loss(z1, z2)  
 
-        self.log('train_loss', loss['total'].item(), on_step=True, on_epoch=True, prog_bar=True)
-        return loss['total']
-
-    
-    # def predict_step(self, batch, batch_idx):  #used in validation step!
-    #     batch_inputs, edges, edge_type, name = batch
-    #     onset_edges = edges[:, edge_type == 0]
-    #     onset_idx = unique_onsets(batch_labels["onset"])
-    #     batch_pred = self.module((batch_inputs, edges, edge_type, onset_edges, onset_idx))
-    #     return batch_pred
+        batch_size = lengths1.shape[0]
+        self.log('train_loss', loss["total"].item(), on_step=False, on_epoch=True, prog_bar=False, batch_size=batch_size) 
+        self.log("global_step", self.global_step, on_step=True, prog_bar=False, batch_size=batch_size)
+        return loss["total"]
 
     def configure_optimizers(self):
         

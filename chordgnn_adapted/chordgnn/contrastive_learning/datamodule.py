@@ -71,7 +71,7 @@ class ContrastiveGraphDatamodule(LightningDataModule):
         max_idx = []
         max_onset_div = []
         for e in examples:
-            lengths.append(e[0].shape[0]) #used to be labels.shape[0]
+            lengths.append(e[3].unique().numel()) #used to be labels.shape[0] 
             x.append(e[0])
             edge_index.append(e[1])
             edge_types.append(e[2])

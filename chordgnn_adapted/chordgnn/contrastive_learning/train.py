@@ -138,27 +138,22 @@ class ChordEncoder(nn.Module):
         x, edge_index, edge_type, onset_index, onset_idx, lengths = batch
         h_pitch = self.pitch_embedding(x[:, 0].long())
         h_spelling = self.spelling_embedding(x[:, 1].long())
-        h = self.embedding(x[:, 2:-1])
-        h = torch.cat([h, h_pitch, h_spelling], dim=-1)
+
+        h_other = self.embedding(x[:, 2:-1])
+        h = torch.cat([h_other, h_pitch, h_spelling], dim=-1)
         # h = F.normalize(self.embedding(x[:, :-1]))
         h = self.encoder(h, edge_index, edge_type)
         h = F.normalize(self.activation(h))
         h, idx = self.pool(h, onset_index, onset_idx)
-        h = torch.cat([h, x[:, -1][idx].unsqueeze(-1)], dim=-1)
-        h = self.layernorm1(self.activation(self.proj1(h)))
-        h = self.layernorm2(self.activation(self.proj2(h)))
         if lengths is not None:
             lengths = lengths.tolist()
-            h = torch.split(h, lengths, dim=0)
-            h = nn.utils.rnn.pad_sequence(h, batch_first=True, padding_value=-1)
-            h = nn.utils.rnn.pack_padded_sequence(h, lengths, batch_first=True)
-            h, _ = self.gru(h)
-            h, _ = nn.utils.rnn.pad_packed_sequence(h, batch_first=True, padding_value=-1)
-            h = self.layernormgru(h)
-            h = h.reshape(-1, h.shape[-1])
+            h_split = torch.split(h, lengths, dim=0)
+            h = torch.stack([s.mean(dim=0) for s in h_split])  # shape: [batch_size, emb_dim]
         else:
-            h, _ = self.gru(h.unsqueeze(0))
-            h = self.layernormgru(h.squeeze(0))
+            h = h.mean(dim=0, keepdim=True)  # just in case single graph, no batching
+
+        h = self.layernorm2(self.activation(self.proj2(h)))
+
         return h
 
 class ChordPredictionModel(nn.Module):
@@ -253,9 +248,9 @@ class UnsupervisedContrastiveLearning(LightningModule):
         loss = self.train_loss(z1, z2)  
 
         batch_size = lengths1.shape[0]
-        self.log('train_loss', loss["total"].item(), on_step=False, on_epoch=True, prog_bar=False, batch_size=batch_size) 
+        self.log('train_loss', loss.item(), on_step=False, on_epoch=True, prog_bar=False, batch_size=batch_size) 
         self.log("global_step", self.global_step, on_step=True, prog_bar=False, batch_size=batch_size)
-        return loss["total"]
+        return loss
 
     def configure_optimizers(self):
         
@@ -268,7 +263,7 @@ class UnsupervisedContrastiveLearning(LightningModule):
         return {
             "optimizer": optimizer,
             "lr_scheduler": scheduler,
-            "monitor": "val_loss"
+            "monitor": "train_loss"
         }
 
 
@@ -278,6 +273,7 @@ def unique_onsets(onsets):
     inverse, perm = inverse.flip([0]), perm.flip([0])
     perm = inverse.new_empty(unique.size(0)).scatter_(0, inverse, perm)
     return perm
+
 
 
 # class UnsupervisedContrastiveLearning(LightningModule):

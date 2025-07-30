@@ -76,8 +76,7 @@ datamodule = st.data.AugmentedGraphDatamodule(
     num_workers=8, include_synth=args.include_synth, num_tasks=args.num_tasks,  #16
     collection=args.collection, batch_size=args.batch_size, version=args.data_version)
 
-model = st.models.chord.ChordPrediction.load_from_checkpoint(checkpoint_path="path_to_unsupervised_checkpoint")
-
+model = st.models.chord.ChordPrediction.load_from_checkpoint(checkpoint_path="chordgnn/transfer_learning/checkpoint/epoch=24-step=325.ckpt", strict=False)
 
 checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="global_step", mode="max")
 early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.02, patience=5, verbose=False, mode="min")

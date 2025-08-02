@@ -34,6 +34,7 @@ parser.add_argument("--use_ckpt", type=str, default=None, help="Use checkpoint f
 parser.add_argument("--num_tasks", type=int, default=11, choices=[5, 11, 14], help="Number of tasks to train on.")
 parser.add_argument("--data_version", type=str, default="v1.0.0", choices=["v1.0.0", "latest"], help="Version of the dataset to use.")
 parser.add_argument("--n_epochs", type=int, default=10, help="Number of epochs to train for.")
+parser.add_argument("--use-teacher", type=bool, default=True, help="Teacher model for contrastive learning.")
 
 # for reproducibility
 torch.manual_seed(0)
@@ -55,6 +56,7 @@ n_layers = args.n_layers
 n_hidden = args.n_hidden
 force_reload = False
 num_workers = args.num_workers
+use_teacher = args.use_teacher
 
 first_name = args.mtl_norm if args.mtl_norm != "none" else "Wloss" #Wloss is used by default (best results in paper)
 name = "{}-{}x{}-lr={}-wd={}-dr={}".format(first_name, n_layers, n_hidden,
@@ -64,7 +66,7 @@ weight_loss = args.mtl_norm not in ["Neutral", "Rotograd", "GradNorm"] # true by
 datamodule = st.contrastive_learning.datamodule.ContrastiveGraphDatamodule(batch_size=args.batch_size, num_workers=8, num_tasks=args.num_tasks) 
 
 model = st.contrastive_learning.train.UnsupervisedContrastiveLearning(datamodule.features, args.n_hidden, datamodule.tasks, args.n_layers, lr=args.lr, dropout=args.dropout,
-    weight_decay=args.weight_decay, use_jk=args.use_jk, device=dev, weight_loss=weight_loss)
+    weight_decay=args.weight_decay, use_jk=args.use_jk, device=dev, weight_loss=weight_loss, use_teacher=use_teacher)
 
 checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="global_step", mode="max")
 early_stop_callback = EarlyStopping(monitor="train_loss", min_delta=0.02, patience=5, verbose=False, mode="min")

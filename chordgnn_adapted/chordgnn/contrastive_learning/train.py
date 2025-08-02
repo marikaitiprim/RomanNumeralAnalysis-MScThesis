@@ -5,6 +5,7 @@ from torch_scatter import scatter
 from pytorch_lightning import LightningModule
 from chordgnn.models.core import HGCN, MLP
 from info_nce import InfoNCE #pip install info-nce-pytorch
+from chordgnn.models.chord import ChordPrediction
 
 class OnsetEdgePoolingVersion2(nn.Module):
     def __init__(self, in_channels, dropout=0):
@@ -105,31 +106,19 @@ class ChordEncoder(nn.Module):
         self.spelling_embedding = nn.Embedding(49, 16)
         self.pitch_embedding = nn.Embedding(128, 16)
         self.embedding = nn.Linear(in_feats-3, 32)
-        # self.embedding = nn.Linear(in_feats-1, n_hidden)
         self.encoder = HGCN(64, n_hidden*2, n_hidden, n_layers, activation=activation, dropout=dropout, jk=use_jk)
-        # self.encoder = HResGatedConv(64, n_hidden*2, n_hidden, n_layers, activation=activation, dropout=dropout, jk=use_jk)
-        # self.etypes = {"onset":0, "consecutive":1, "during":2, "rests":3, "consecutive_rev":4, "during_rev":5, "rests_rev":6}
-        # self.encoder = HeteroResGatedGraphConvLayer(n_hidden, n_hidden, etypes=self.etypes, reduction="none")
-        # self.reduction = HeteroAttention(n_hidden, len(self.etypes.keys()))
         self.pool = OnsetEdgePoolingVersion2(n_hidden, dropout=dropout)
-        self.proj1 = nn.Linear(n_hidden+1, n_hidden)
-        self.layernorm1 = nn.BatchNorm1d(n_hidden)
         self.proj2 = nn.Linear(n_hidden, n_hidden//2)
         self.layernorm2 = nn.BatchNorm1d(n_hidden//2)
-        self.gru = nn.GRU(input_size=n_hidden//2, hidden_size=int(n_hidden/2), num_layers=2, bidirectional=True,
-                          batch_first=True, dropout=dropout)
-        self.layernormgru = nn.LayerNorm(n_hidden)
         self.reset_parameters()
 
     def reset_parameters(self):
         nn.init.xavier_uniform_(self.embedding.weight, gain=nn.init.calculate_gain('relu'))
-        nn.init.xavier_uniform_(self.proj1.weight, gain=nn.init.calculate_gain('relu'))
+        # nn.init.xavier_uniform_(self.proj1.weight, gain=nn.init.calculate_gain('relu'))
         nn.init.xavier_uniform_(self.proj2.weight, gain=nn.init.calculate_gain('relu'))
         nn.init.constant_(self.embedding.bias, 0)
-        nn.init.constant_(self.proj1.bias, 0)
+        # nn.init.constant_(self.proj1.bias, 0)
         nn.init.constant_(self.proj2.bias, 0)
-        self.layernormgru.reset_parameters()
-        self.layernorm1.reset_parameters()
         self.layernorm2.reset_parameters()
         self.encoder.reset_parameters()
         self.pool.reset_parameters()
@@ -141,7 +130,6 @@ class ChordEncoder(nn.Module):
 
         h_other = self.embedding(x[:, 2:-1])
         h = torch.cat([h_other, h_pitch, h_spelling], dim=-1)
-        # h = F.normalize(self.embedding(x[:, :-1]))
         h = self.encoder(h, edge_index, edge_type)
         h = F.normalize(self.activation(h))
         h, idx = self.pool(h, onset_index, onset_idx)
@@ -212,7 +200,8 @@ class UnsupervisedContrastiveLearning(LightningModule):
                  weight_decay=5e-4,
                  use_jk=False,
                  weight_loss=True,
-                 device=0
+                 device=0,
+                 use_teacher=True
                  ):
         super(UnsupervisedContrastiveLearning, self).__init__()
         self.tasks = tasks
@@ -226,6 +215,76 @@ class UnsupervisedContrastiveLearning(LightningModule):
         self.test_roman = list()
         self.test_roman_ts = list()
         self.train_loss = InfoNCE(temperature=0.07)
+        self.use_teacher = use_teacher
+
+        if use_teacher:
+            self.teacher_model = ChordPrediction.load_from_checkpoint("chordgnn/contrastive_learning/checkpoint/epoch=99-step=23800.ckpt") #pretrained chordgnn model
+            self.teacher_model.eval()
+            self.teacher_model.freeze() 
+            self.teacher_model.to(device) 
+        else:
+            self.teacher_model = None
+
+    def pool_by_graph(self, node_embeddings, lengths):
+        """Mean-pool node embeddings into graph-level (B, D) shape"""
+        graph_embeddings = []
+        idx = 0
+        for length in lengths:
+            graph_embed = node_embeddings[idx:idx+length].mean(dim=0)
+            graph_embeddings.append(graph_embed)
+            idx += length
+        return torch.stack(graph_embeddings, dim=0)
+
+    def get_teacher_embeddings(self, batch):
+        """Returns embeddings from the frozen teacher model"""
+        x, edge_index, edge_type, onset_divs, lengths = batch
+        onset_edges = edge_index[:, edge_type == 0]
+        onset_idx = unique_onsets(onset_divs)
+
+        with torch.no_grad():
+            embeddings = self.teacher_model.module.encoder((
+                x, edge_index, edge_type, onset_edges, onset_idx, lengths
+            ))
+        return self.pool_by_graph(embeddings, lengths)
+
+    def create_teacher_mask(self, embedding_1, embedding_2, threshold=0.9):
+        """
+        Efficient cosine similarity-based mask between two embedding sets without expanding (B, B, D)
+        """
+        if self.teacher_model is None:
+            return None
+
+        # Normalize the embeddings
+        embedding_1 = F.normalize(embedding_1, dim=1)  # (B, D)
+        embedding_2 = F.normalize(embedding_2, dim=1)  # (B, D)
+
+        # Cosine similarity = dot product for normalized vectors
+        sim_matrix = torch.matmul(embedding_1, embedding_2.T)  # (B, B)
+
+        # Mask where similarity is too high (false negatives)
+        mask = sim_matrix < threshold  # True = valid negative
+
+        # Ensure the diagonal is always included (positive pairs)
+        mask.fill_diagonal_(True)
+
+        return mask
+
+    def masked_info_nce(self, z1, z2, mask, temperature=0.07):
+        """
+        z1, z2: shape (B, D)
+        mask: shape (B, B) — True where negatives are valid, False = masked
+        """
+        B = z1.size(0)
+
+        z1 = F.normalize(z1, dim=1)
+        z2 = F.normalize(z2, dim=1)
+
+        sim_matrix = torch.matmul(z1, z2.T) / temperature  # (B, B)
+        sim_matrix = sim_matrix.masked_fill(~mask, -1e9)
+
+        labels = torch.arange(B).to(z1.device)
+        loss = F.cross_entropy(sim_matrix, labels)
+        return loss
 
     def training_step(self, batch, batch_idx):
         opt = self.optimizers()
@@ -245,7 +304,15 @@ class UnsupervisedContrastiveLearning(LightningModule):
         z1 = self.module((x1, edge_index1, edge_type1, onset_edges1, onset_idx1, lengths1), return_embedding=True)
         z2 = self.module((x2, edge_index2, edge_type2, onset_edges2, onset_idx2, lengths2), return_embedding=True)
 
-        loss = self.train_loss(z1, z2)  
+        if self.use_teacher:
+
+            t1 = self.get_teacher_embeddings(batch_view1)
+            t2 = self.get_teacher_embeddings(batch_view2)
+            
+            mask = self.create_teacher_mask(t1, t2)
+            loss = self.masked_info_nce(z1, z2, mask)
+        else:
+            loss = self.train_loss(z1, z2) #the original InfoNCE loss
 
         batch_size = lengths1.shape[0]
         self.log('train_loss', loss.item(), on_step=False, on_epoch=True, prog_bar=False, batch_size=batch_size) 
@@ -273,72 +340,3 @@ def unique_onsets(onsets):
     inverse, perm = inverse.flip([0]), perm.flip([0])
     perm = inverse.new_empty(unique.size(0)).scatter_(0, inverse, perm)
     return perm
-
-
-
-# class UnsupervisedContrastiveLearning(LightningModule):
-#     def __init__(self, encoder, temperature=0.07, lr=0.0001, use_teacher=True):
-#         super().__init__()
-#         self.encoder = encoder
-#         self.temperature = temperature
-#         self.lr = lr
-#         self.use_teacher = use_teacher
-#         self.automatic_optimization = True
-        
-#         # Use consistent temperature
-#         self.train_loss = InfoNCE(temperature=temperature)
-#         self.val_loss = InfoNCE(temperature=temperature)
-        
-#         # Teacher model for pseudo-labeling (optional) -> fix this
-#         if use_teacher:
-#             self.teacher_model = ChordPrediction.load_from_checkpoint("checkpoint/epoch=99-step=23800.ckpt") #pretrained chordgnn model
-#             self.teacher_model.eval()
-#             for p in self.teacher_model.parameters():
-#                 p.requires_grad = False
-#         else:
-#             self.teacher_model = None
-    
-#     def forward(self, graph):
-#         return self.encoder(graph)
-    
-#     def create_teacher_mask(self, graph_1, graph_2, original_graph):
-#         """Create mask based on teacher model predictions"""
-#         if self.teacher_model is None:
-#             return None
-            
-#         with torch.no_grad():
-#             # Get predictions for augmented views
-#             pred_1 = self.teacher_model(graph_1)
-#             pred_2 = self.teacher_model(graph_2)
-            
-#             # Create mask: 1 where predictions differ (keep as negatives)
-#             # 0 where predictions match (potential false negatives to ignore)
-#             if pred_1.dim() > 1:  # Multi-class predictions
-#                 pred_1 = pred_1.argmax(dim=-1)
-#                 pred_2 = pred_2.argmax(dim=-1)
-            
-#             mask = (pred_1 != pred_2).float()
-#             return mask
-    
-#     def training_step(self, batch, batch_idx):
-#         # Expect: batch = (graph_1, graph_2, original_graph)
-#         graph_1, graph_2, original_graph = batch
-        
-#         # Get embeddings
-#         z1 = self.encoder(graph_1)
-#         z2 = self.encoder(graph_2)
-        
-#         # Compute contrastive loss
-#         if self.use_teacher:
-#             mask = self.create_teacher_mask(graph_1, graph_2, original_graph)
-#             # Note: Current InfoNCE library doesn't support masking
-#             # You'd need to implement custom InfoNCE with masking
-#             loss = self.train_loss(z1, z2)
-#         else:
-#             loss = self.train_loss(z1, z2)
-        
-#         # Logging
-#         self.log("train_contrastive_loss", loss, on_epoch=True, prog_bar=True)
-#         self.log("train_loss", loss, on_step=True, on_epoch=True)
-        
-#         return loss

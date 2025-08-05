@@ -33,7 +33,7 @@ parser.add_argument("--force_reload", action="store_true", help="Force reload of
 parser.add_argument("--use_ckpt", type=str, default=None, help="Use checkpoint for prediction.")
 parser.add_argument("--num_tasks", type=int, default=11, choices=[5, 11, 14], help="Number of tasks to train on.")
 parser.add_argument("--data_version", type=str, default="v1.0.0", choices=["v1.0.0", "latest"], help="Version of the dataset to use.")
-parser.add_argument("--n_epochs", type=int, default=10, help="Number of epochs to train for.")
+parser.add_argument("--n_epochs", type=int, default=25, help="Number of epochs to train for.") #train loss converges at 25 epochs
 parser.add_argument("--use-teacher", type=bool, default=True, help="Teacher model for contrastive learning.")
 
 # for reproducibility
@@ -87,7 +87,7 @@ trainer = Trainer(
 # training
 trainer.fit(model, datamodule)
 
-df = pd.read_csv("logs/contrastive/version_0/metrics.csv")
+df = pd.read_csv("logs/contrastive/version_0/metrics.csv") #load the appropriate metrics file
 df = df[df['train_loss'].notna()]
 plt.plot(df["epoch"], df["train_loss"])
 plt.xlabel("Epoch")

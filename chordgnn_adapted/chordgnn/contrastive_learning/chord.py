@@ -53,7 +53,7 @@ class PairedContrastiveDataset(chordgnnDataset): #positive pairs
     def __getitem__(self, idx):
         # Choose randomly one of the 3 valid positive pair types
         # pair_type = random.choice(["pitch-time", "pitch-original", "time-original"])
-        pair_type = "pitch_time"
+        pair_type = "pitch-time"
 
         if pair_type == "pitch-time": # positive pairs only with augmentations
             view_1 = self.pitch_aug_dataset[idx]

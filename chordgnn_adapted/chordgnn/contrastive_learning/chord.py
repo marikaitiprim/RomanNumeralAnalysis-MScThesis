@@ -52,17 +52,18 @@ class PairedContrastiveDataset(chordgnnDataset): #positive pairs
 
     def __getitem__(self, idx):
         # Choose randomly one of the 3 valid positive pair types
-        pair_type = random.choice(["pitch-time", "pitch-original", "time-original"])
+        # pair_type = random.choice(["pitch-time", "pitch-original", "time-original"])
+        pair_type = "pitch_time"
 
-        if pair_type == "pitch-time":
+        if pair_type == "pitch-time": # positive pairs only with augmentations
             view_1 = self.pitch_aug_dataset[idx]
             view_2 = self.time_aug_dataset[idx]
-        elif pair_type == "pitch-original":
-            view_1 = self.pitch_aug_dataset[idx]
-            view_2 = self.original_dataset[idx]
-        elif pair_type == "time-original":
-            view_1 = self.time_aug_dataset[idx]
-            view_2 = self.original_dataset[idx]
+        # elif pair_type == "pitch-original":
+        #     view_1 = self.pitch_aug_dataset[idx]
+        #     view_2 = self.original_dataset[idx]
+        # elif pair_type == "time-original":
+        #     view_1 = self.time_aug_dataset[idx]
+        #     view_2 = self.original_dataset[idx]
 
         # Randomly flip the order to avoid encoder bias
         if random.random() < 0.5:
@@ -118,12 +119,6 @@ class ChordGraphDataset(chordgnnDataset):
 
     def __len__(self):
         return len(self.graphs)
-
-    # def __getitem__(self, idx):
-    #     return [
-    #         self.get_graph_attr(i)
-    #         for i in idx
-    #     ]
     
     def __getitem__(self, idx):
         return self.get_graph_attr(idx)

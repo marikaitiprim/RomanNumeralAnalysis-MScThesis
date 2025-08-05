@@ -1,0 +1,8 @@
+/**/*.pyc
+**/.DS_Store
+*.DS_Store
+chordgnn/__pycache__/\*.pyc\
+wandb/
+dataset_pitch_jhub/
+dataset_*/
+*.yaml

@@ -34,7 +34,7 @@ parser.add_argument("--force_reload", action="store_true", help="Force reload of
 parser.add_argument("--use_ckpt", type=str, default=None, help="Use checkpoint for prediction.")
 parser.add_argument("--num_tasks", type=int, default=11, choices=[5, 11, 14], help="Number of tasks to train on.")
 parser.add_argument("--data_version", type=str, default="v1.0.0", choices=["v1.0.0", "latest"], help="Version of the dataset to use.")
-parser.add_argument("--n_epochs", type=int, default=31, help="Number of epochs to train for.")
+parser.add_argument("--n_epochs", type=int, default=15, help="Number of epochs to train for.") #best for val loss convergence
 
 # for reproducibility
 torch.manual_seed(0)
@@ -69,7 +69,7 @@ datamodule = st.data.AugmentedGraphDatamodule(
     num_workers=8, include_synth=args.include_synth, num_tasks=args.num_tasks,  #16
     collection=args.collection, batch_size=args.batch_size, version=args.data_version)
 
-model = st.models.chord.ChordPrediction.load_from_checkpoint("chordgnn/transfer_learning/checkpoints/epoch=24-step=325.ckpt", strict=False)
+model = st.models.chord.ChordPrediction.load_from_checkpoint("chordgnn/transfer_learning/checkpoints/epoch=24-step=475.ckpt", strict=False)
 
 for param in model.module.encoder.parameters():
     param.requires_grad = False #freeze only the encoder 

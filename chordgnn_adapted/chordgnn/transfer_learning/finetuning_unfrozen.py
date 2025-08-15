@@ -75,7 +75,7 @@ checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="global_step", mode=
 early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.02, patience=5, verbose=False, mode="min")
 use_ddp = len(devices) > 1 if isinstance(devices, list) else False
 
-logger = CSVLogger("logs", name="finetuning_unfreezed")
+logger = CSVLogger("logs", name="finetuning_unfrozen")
 trainer = Trainer(
     max_epochs=args.n_epochs,
     accelerator="auto", devices=devices, 
@@ -92,7 +92,7 @@ trainer.fit(model, datamodule)
 # Testing with best model
 trainer.test(model, datamodule, ckpt_path=checkpoint_callback.best_model_path)
 
-df = pd.read_csv("logs/finetuning_unfreezed/version_0/metrics.csv")
+df = pd.read_csv("logs/finetuning_unfrozen/version_0/metrics.csv")
 df = df[df['val_loss'].notna()]
 plt.plot(df["epoch"], df["val_loss"])
 plt.xlabel("Epoch")

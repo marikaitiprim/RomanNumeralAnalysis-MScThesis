@@ -74,4 +74,4 @@ Tip: Change paths to checkpoints and datasets if necessary.
 
 ## Architecture of the Teacher-student network
 
-<img src="teacher.jpg" alt="Teacher-student network" width="500"/>
+<img src="teacher.jpg" alt="Teacher-student network" width="800"/>

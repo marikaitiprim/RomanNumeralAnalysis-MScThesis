@@ -1,5 +1,4 @@
 # Semi-Supervised Learning with Graph Neural Networks for Roman Numeral Analysis
-<<<<<<< HEAD
 
 Main repository for my MSc Project at Queen Mary University of London. 
 
@@ -76,6 +75,3 @@ Tip: Change paths to checkpoints and datasets if necessary.
 ## Architecture of the Teacher-student network
 
 <img src="teacher.jpg" alt="Teacher-student network" width="500"/>
-=======
-Main repository for the MSc project at QMUL
->>>>>>> 19c0e87bb7c2968508d470f4b8e9ccc7c804dfa1
